@@ -1,0 +1,116 @@
+name: "Unit Test"
+
+on:
+  workflow_call:
+    inputs:
+      binary-name:
+        required: false
+        description: "Binary name"
+        type: string
+      make-custom-target:
+        required: false
+        default: ''
+        description: "Custom Makefile target to run"
+        type: string
+      docker-push-tag:
+        required: false
+        default: ''
+        description: "Docker push tag"
+        type: string
+      runs-on:
+        required: false
+        default: "ubuntu-latest"
+        description: "Runner label for jobs"
+        type: string
+    secrets:
+      docker_username:
+        required: false
+      docker_password:
+        required: false
+      docker_github_token:
+        required: false
+      gh_token:
+        required: false
+
+jobs:
+  unit-test:
+    name: "Unit Test"
+    runs-on: ${{ inputs.runs-on }}
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+
+    - name: Docker Login (Docker Hub)
+      uses: docker/login-action@v2
+      env:
+        DOCKER_USERNAME: ${{ secrets.docker_username }}
+        DOCKER_PASSWORD: ${{ secrets.docker_password }}
+      if: ${{ (env.DOCKER_USERNAME != '') && (env.DOCKER_PASSWORD != '') }}
+      with:
+        username: ${{ secrets.docker_username }}
+        password: ${{ secrets.docker_password }}
+
+    - name: Docker Login (GitHub Container Registry)
+      uses: docker/login-action@v2
+      env:
+        DOCKER_GITHUB_TOKEN: ${{ secrets.docker_github_token }}
+      if: ${{ env.DOCKER_GITHUB_TOKEN != '' }}
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.docker_github_token }}
+
+    - name: Set up Node
+      if: ${{ hashFiles('package.json') != '' }}
+      uses: actions/setup-node@v3
+      with:
+        node-version: 16
+      id: node
+
+    - name: Set up Go
+      if: ${{ hashFiles('go.mod') != '' }}
+      uses: actions/setup-go@v4
+      with:
+        go-version: ^1
+        cache: false
+      id: go
+
+    - name: Set up go env
+      if: ${{ hashFiles('go.mod') != '' }}
+      run: export PATH=${PATH}:`go env GOPATH`/bin
+
+    - name: Run golangci/golangci-lint
+      if: ${{ hashFiles('.golangci.yml') != '' }}
+      uses: golangci/golangci-lint-action@v3
+      with:
+        skip-cache: true
+
+    - name: Node Package Manager CI
+      if: ${{ hashFiles('package.json') != '' }}
+      run: npm ci
+
+    - name: Make Docker
+      if: ${{ hashFiles('Dockerfile') != '' }}
+      run: make docker
+      env:
+        DOCKER_TAGS: "latest"
+
+    - name: Run Unit Tests Target
+      run: make test
+
+    - name: Run CI Target
+      run: make ci
+
+    - name: Make Binary Target
+      if: ${{ inputs.binary-name }}
+      run: make artifacts/build/release/linux/amd64/${{ inputs.binary-name }}
+
+    - name: Run Custom Make Target
+      if: ${{ inputs.make-custom-target != '' }}
+      run: make ${{ inputs.make-custom-target }}
+
+    - name: Make Docker Push
+      if: ${{ inputs.docker-push-tag != '' }}
+      run: make docker-push
+      env:
+        DOCKER_TAGS: ${{ inputs.docker-push-tag }}
