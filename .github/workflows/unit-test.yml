@@ -109,12 +109,6 @@ jobs:
       if: ${{ hashFiles('package.json') != '' }}
       run: npm ci
 
-    - name: Make Docker
-      if: ${{ hashFiles('Dockerfile') != '' }}
-      run: make docker
-      env:
-        DOCKER_TAGS: "latest"
-
     - name: Run Unit Tests Target
       run: make test
 

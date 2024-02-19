@@ -22,13 +22,23 @@ on:
         type: string
         default: ''
         required: false
-      tag-sha:
-        type: boolean
-        default: false
-        required: false
       tag-date:
         type: string
         default: ""
+        required: false
+      enable-tag-sha:
+        type: boolean
+        default: false
+        required: false
+      enable-tag-semver:
+        type: boolean
+        default: true
+        description: "Add semver tag matching commit ref (major.minor.patch)"
+        required: false
+      enable-tag-shortsemver:
+        type: boolean
+        default: true
+        description: "Add semver short tag matching commit ref (major.minor)"
         required: false
       build-args:
         type: string
@@ -41,16 +51,6 @@ on:
       make-targets:
         type: string
         default: ""
-        required: false
-      semver-tag:
-        type: boolean
-        default: true
-        description: "Add semver tag matching commit ref (major.minor.patch)"
-        required: false
-      semver-shorttag:
-        type: boolean
-        default: true
-        description: "Add semver short tag matching commit ref (major.minor)"
         required: false
       platforms:
         required: false
@@ -100,8 +100,8 @@ jobs:
       uses: actions/github-script@v6
       env:
         INPUT_FORCE_LATEST: "${{ inputs.force-latest }}"
-        INPUT_SEMVER_TAG: "${{ inputs.semver-tag }}"
-        INPUT_SEMVER_SHORTTAG: "${{ inputs.semver-shorttag }}"
+        INPUT_SEMVER_TAG: "${{ inputs.enable-tag-semver }}"
+        INPUT_SEMVER_SHORTTAG: "${{ inputs.enable-tag-shortsemver }}"
         INPUT_MANUAL_TAG: "${{ inputs.manual-tag }}"
         INPUT_LATEST_ON_BRANCH: "${{ inputs.latest-on-branch }}"
         OUTPUT_DATETAG: "${{ steps.date.outputs.tag }}"
@@ -148,7 +148,9 @@ jobs:
         flavor: |
           latest=${{ inputs.latest }}
         tags: |
-          type=sha,enable=${{ inputs.tag-sha }}
+          type=sha,enable=${{ inputs.enable-tag-sha }}
+          type=semver,pattern={{version}},enable=${{ inputs.enable-tag-semver }}
+          type=semver,pattern={{major}}.{{minor}},enable=${{ inputs.enable-tag-shortsemver }}
           type=ref,event=pr
           ${{ steps.manualmeta.outputs.config-tags }}
 
