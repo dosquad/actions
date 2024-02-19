@@ -25,17 +25,15 @@ on:
         required: true
         description: "Pull Request Number (github.event.pull_request.number)"
         type: string
-  # pull_request:
-  #   types: 
-  #     - closed
 
 jobs:
   metadata:
     name: "Generate Metadata"
     runs-on: ubuntu-latest
     outputs:
+      user-type: ${{steps.userdata.outputs.type}}
       version-url: ${{steps.version-url.outputs.url}}
-      version-id: ${{steps.version-id.outputs.VERSION_ID}}
+      version-id: ${{steps.version-id.outputs.version_id}}
     steps:
       - name: Get User Type from API
         id: userdata
@@ -88,11 +86,9 @@ jobs:
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer ${{secrets.GITHUB_TOKEN}}" \
             "${{steps.version-url.outputs.url}}" >> ${HOME}/versionIds.json
-          echo "VERSION_ID=$(jq -r ".[] | select(.metadata.container.tags | index(\"pr-${{ inputs.pull-request-number }}\")).id" ${HOME}/versionIds.json)" | tee -a "${GITHUB_OUTPUT}"
-      - name: Print Version ID JSON
-        run: cat ${HOME}/versionIds.json
+          echo "version_id=$(jq -r ".[] | select(.metadata.container.tags | index(\"pr-${{ inputs.pull-request-number }}\")).id" ${HOME}/versionIds.json)" | tee -a "${GITHUB_OUTPUT}"
       - name: Print Version ID
-        run: echo "The selected Version ID is ${{ steps.version-id.outputs.VERSION_ID }}"
+        run: echo "The selected Version ID is ${{ steps.version-id.outputs.version_id }}"
 
   # this job will only run if the PR has been merged
   merge_job:
