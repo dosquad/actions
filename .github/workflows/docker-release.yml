@@ -45,7 +45,12 @@ on:
       semver-tag:
         type: boolean
         default: true
-        description: "Add semver tag matching commit ref"
+        description: "Add semver tag matching commit ref (major.minor.patch)"
+        required: false
+      semver-shorttag:
+        type: boolean
+        default: true
+        description: "Add semver short tag matching commit ref (major.minor)"
         required: false
       platforms:
         required: false
@@ -96,17 +101,22 @@ jobs:
       env:
         INPUT_FORCE_LATEST: "${{ inputs.force-latest }}"
         INPUT_SEMVER_TAG: "${{ inputs.semver-tag }}"
+        INPUT_SEMVER_SHORTTAG: "${{ inputs.semver-shorttag }}"
         INPUT_MANUAL_TAG: "${{ inputs.manual-tag }}"
         INPUT_LATEST_ON_BRANCH: "${{ inputs.latest-on-branch }}"
         OUTPUT_DATETAG: "${{ steps.date.outputs.tag }}"
       with:
         script: |
-          const { INPUT_FORCE_LATEST, INPUT_SEMVER_TAG, INPUT_MANUAL_TAG, INPUT_LATEST_ON_BRANCH, OUTPUT_DATETAG } = process.env
+          const { INPUT_FORCE_LATEST, INPUT_SEMVER_TAG, INPUT_SEMVER_SHORTTAG, INPUT_MANUAL_TAG, INPUT_LATEST_ON_BRANCH, OUTPUT_DATETAG } = process.env
 
           output = []
 
           if (INPUT_SEMVER_TAG == "true") {
             output.push(`type=semver,pattern={{version}}`)
+          }
+
+          if (INPUT_SEMVER_SHORTTAG == "true") {
+            output.push(`type=semver,pattern={{major}}.{{minor}}`)
           }
 
           if (INPUT_FORCE_LATEST == "true") {
