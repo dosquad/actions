@@ -1,0 +1,22 @@
+name: 'Upload Artifacts'
+description: 'Upload artifacts from a run but can run even if build steps fail'
+inputs:
+  path:
+    required: false
+    default: ""
+    description: "Path to upload as artifacts"
+  name:
+    required: false
+    default: "artifacts-${{ github.sha }}"
+    description: "Artifact name"
+runs:
+  using: "composite"
+  steps:
+    - name: Store Artifacts
+      if: ${{ inputs.path != '' }}
+      uses: actions/upload-artifact@v3
+      with:
+        name: ${{ inputs.name }}
+        path: ${{ inputs.path }}
+        if-no-files-found: ignore
+        retention-days: 30

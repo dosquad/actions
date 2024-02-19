@@ -26,6 +26,10 @@ on:
         type: boolean
         default: false
         required: false
+      tag-date:
+        type: string
+        default: ""
+        required: false
       build-args:
         type: string
         default: ''
@@ -33,6 +37,15 @@ on:
       manual-tag:
         type: string
         default: ''
+        required: false
+      make-targets:
+        type: string
+        default: ""
+        required: false
+      semver-tag:
+        type: boolean
+        default: true
+        description: "Add semver tag matching commit ref"
         required: false
       platforms:
         required: false
@@ -47,11 +60,11 @@ on:
           event.  Otherwise, uses the default branch.
         type: string
     secrets:
-      docker_username:
+      DOCKER_USERNAME:
         required: false
-      docker_password:
+      DOCKER_PASSWORD:
         required: false
-      docker_github_token:
+      DOCKER_GITHUB_TOKEN:
         required: false
 
 jobs:
@@ -63,19 +76,38 @@ jobs:
       uses: actions/checkout@v3
       with:
         ref: ${{ inputs.ref }}
- 
+
+    - name: Run Make Targets
+      if: ${{ inputs.make-targets != '' }}
+      run: make ${{ inputs.make-targets }}
+
+    - name: Create a date tag
+      if: ${{ inputs.tag-date != '' }}
+      id: date
+      env:
+        INPUT_TAGDATE: "${{ inputs.tag-date }}"
+      run: |
+        export TZ='Australia/Queensland'
+        echo "tag=$(date +"${INPUT_TAGDATE}")" | tee "${GITHUB_OUTPUT}"
+
     - name: Manual Tag Config
       id: manualmeta
       uses: actions/github-script@v6
       env:
         INPUT_FORCE_LATEST: "${{ inputs.force-latest }}"
+        INPUT_SEMVER_TAG: "${{ inputs.semver-tag }}"
         INPUT_MANUAL_TAG: "${{ inputs.manual-tag }}"
         INPUT_LATEST_ON_BRANCH: "${{ inputs.latest-on-branch }}"
+        OUTPUT_DATETAG: "${{ steps.date.outputs.tag }}"
       with:
         script: |
-          const { INPUT_FORCE_LATEST, INPUT_MANUAL_TAG, INPUT_LATEST_ON_BRANCH } = process.env
+          const { INPUT_FORCE_LATEST, INPUT_SEMVER_TAG, INPUT_MANUAL_TAG, INPUT_LATEST_ON_BRANCH, OUTPUT_DATETAG } = process.env
 
           output = []
+
+          if (INPUT_SEMVER_TAG == "true") {
+            output.push(`type=semver,pattern={{version}}`)
+          }
 
           if (INPUT_FORCE_LATEST == "true") {
             output.push(`type=raw,value=latest,enable=true`)
@@ -91,25 +123,28 @@ jobs:
             output.push(`type=raw,value=latest,enable=true`)
           }
 
+          if (OUTPUT_DATETAG != "") {
+            output.push(`type=raw,value=${OUTPUT_DATETAG},enable=true`)
+          }
+
           core.setOutput('config-tags', output.join("\n"))
 
     - name: Docker meta
       id: meta
-      uses: docker/metadata-action@v4
+      uses: docker/metadata-action@v5
       with:
         images: |
           ${{ inputs.image }}
         flavor: |
           latest=${{ inputs.latest }}
         tags: |
-          type=semver,pattern={{version}}
           type=sha,enable=${{ inputs.tag-sha }}
           type=ref,event=pr
           ${{ steps.manualmeta.outputs.config-tags }}
 
     - name: Set up QEMU
       if: ${{ inputs.platforms != 'linux/amd64' }}
-      uses: docker/setup-qemu-action@v2
+      uses: docker/setup-qemu-action@v3
       with:
         platforms: ${{ inputs.platforms }}
 
@@ -120,28 +155,28 @@ jobs:
         platforms: ${{ inputs.platforms }}
 
     - name: Docker Login (Docker Hub)
-      uses: docker/login-action@v2
+      uses: docker/login-action@v3
       env:
-        DOCKER_USERNAME: ${{ secrets.docker_username }}
-        DOCKER_PASSWORD: ${{ secrets.docker_password }}
+        DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+        DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
       if: ${{ (env.DOCKER_USERNAME != '') && (env.DOCKER_PASSWORD != '') }}
       with:
-        username: ${{ secrets.docker_username }}
-        password: ${{ secrets.docker_password }}
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
 
     - name: Docker Login (GitHub Container Registry)
-      uses: docker/login-action@v2
+      uses: docker/login-action@v3
       env:
-        DOCKER_GITHUB_TOKEN: ${{ secrets.docker_github_token }}
+        DOCKER_GITHUB_TOKEN: ${{ secrets.DOCKER_GITHUB_TOKEN }}
       if: ${{ env.DOCKER_GITHUB_TOKEN != '' }}
       with:
         registry: ghcr.io
         username: ${{ github.actor }}
-        password: ${{ secrets.docker_github_token }}
+        password: ${{ secrets.DOCKER_GITHUB_TOKEN }}
 
     - name: Build and Push Docker image
       if: ${{ steps.meta.outputs.tags != '' }}
-      uses: docker/build-push-action@v4
+      uses: docker/build-push-action@v5
       with:
         context: ./
         file: ${{ inputs.dockerfile }}
@@ -150,3 +185,10 @@ jobs:
         labels: ${{ steps.meta.outputs.labels }}
         build-args: ${{ inputs.build-args }}
         platforms: ${{ inputs.platforms }}
+
+    - name: Adding Docker Image Markdown Summary
+      if: ${{ steps.meta.outputs.tags != '' }}
+      run: |
+        echo "### Docker Image Deployed to Registry 🚀" >> "${GITHUB_STEP_SUMMARY}"
+        echo "" >> "${GITHUB_STEP_SUMMARY}"
+        echo "${{ steps.meta.outputs.tags }}" >> "${GITHUB_STEP_SUMMARY}"

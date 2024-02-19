@@ -22,14 +22,24 @@ on:
         default: "ubuntu-latest"
         description: "Runner label for jobs"
         type: string
+      upload-artifacts:
+        required: false
+        default: ""
+        description: "Path to upload as artifacts"
+        type: string
+      upload-artifacts-name:
+        required: false
+        default: "artifacts-${{ github.sha }}"
+        description: "Artifacts name"
+        type: string
     secrets:
-      docker_username:
+      DOCKER_USERNAME:
         required: false
-      docker_password:
+      DOCKER_PASSWORD:
         required: false
-      docker_github_token:
+      DOCKER_GITHUB_TOKEN:
         required: false
-      gh_token:
+      CODECOV_TOKEN:
         required: false
 
 jobs:
@@ -38,27 +48,27 @@ jobs:
     runs-on: ${{ inputs.runs-on }}
     steps:
     - name: Checkout
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
     - name: Docker Login (Docker Hub)
       uses: docker/login-action@v2
       env:
-        DOCKER_USERNAME: ${{ secrets.docker_username }}
-        DOCKER_PASSWORD: ${{ secrets.docker_password }}
+        DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+        DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
       if: ${{ (env.DOCKER_USERNAME != '') && (env.DOCKER_PASSWORD != '') }}
       with:
-        username: ${{ secrets.docker_username }}
-        password: ${{ secrets.docker_password }}
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
 
     - name: Docker Login (GitHub Container Registry)
       uses: docker/login-action@v2
       env:
-        DOCKER_GITHUB_TOKEN: ${{ secrets.docker_github_token }}
+        DOCKER_GITHUB_TOKEN: ${{ secrets.DOCKER_GITHUB_TOKEN }}
       if: ${{ env.DOCKER_GITHUB_TOKEN != '' }}
       with:
         registry: ghcr.io
         username: ${{ github.actor }}
-        password: ${{ secrets.docker_github_token }}
+        password: ${{ secrets.DOCKER_GITHUB_TOKEN }}
 
     - name: Set up Node
       if: ${{ hashFiles('package.json') != '' }}
@@ -109,8 +119,26 @@ jobs:
       if: ${{ inputs.make-custom-target != '' }}
       run: make ${{ inputs.make-custom-target }}
 
+    - name: Upload coverage to Codecov
+      env:
+        CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+      if: ${{ env.CODECOV_TOKEN != '' }}
+      uses: codecov/codecov-action@v3
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }}
+        fail_ci_if_error: false
+        verbose: true
+
     - name: Make Docker Push
       if: ${{ inputs.docker-push-tag != '' }}
       run: make docker-push
       env:
         DOCKER_TAGS: ${{ inputs.docker-push-tag }}
+
+    - name: Store Artifacts
+      if: '!cancelled()'
+      id: upload-artifacts
+      uses: dosquad/actions/.github/actions/upload-artifacts@main
+      with:
+        name: ${{ inputs.upload-artifacts-name }}
+        path: ${{ inputs.upload-artifacts }}
