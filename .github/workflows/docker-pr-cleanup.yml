@@ -90,44 +90,44 @@ jobs:
       - name: Print Version ID
         run: echo "The selected Version ID is ${{ steps.version-id.outputs.version_id }}"
 
-  # this job will only run if the PR has been merged
-  merge_job:
-    name: "PR was closed and merged"
-    if: ${{ inputs.pull-request-merged == true }}
-    runs-on: ubuntu-latest
-    needs:
-      metadata
-    steps:
-      - uses: actions/delete-package-versions@v5
-        with:
-          package-name: ${{ inputs.package-name }}
-          package-type: 'container'
-          min-versions-to-keep: 0
-          delete-only-untagged-versions: 'true'
-      - uses: actions/delete-package-versions@v5
-        if: ${{ needs.metadata.outputs.version-id != '' }}
-        with:
-          package-name: ${{ inputs.package-name }}
-          package-type: 'container'
-          package-version-ids: '${{ needs.metadata.outputs.version-id }}'
+  # # this job will only run if the PR has been merged
+  # merge_job:
+  #   name: "PR was closed and merged"
+  #   if: ${{ inputs.pull-request-merged == true }}
+  #   runs-on: ubuntu-latest
+  #   needs:
+  #     metadata
+  #   steps:
+  #     - uses: actions/delete-package-versions@v5
+  #       with:
+  #         package-name: ${{ inputs.package-name }}
+  #         package-type: 'container'
+  #         min-versions-to-keep: 0
+  #         delete-only-untagged-versions: 'true'
+  #     - uses: actions/delete-package-versions@v5
+  #       if: ${{ needs.metadata.outputs.version-id != '' }}
+  #       with:
+  #         package-name: ${{ inputs.package-name }}
+  #         package-type: 'container'
+  #         package-version-ids: '${{ needs.metadata.outputs.version-id }}'
 
-  # this job will only run if the PR has been closed without being merged
-  close_job:
-    name: "PR was closed but not merged"
-    if: ${{ inputs.pull-request-merged == false }}
-    runs-on: ubuntu-latest
-    needs:
-      metadata
-    steps:
-      - uses: actions/delete-package-versions@v5
-        with:
-          package-name: ${{ inputs.package-name }}
-          package-type: 'container'
-          min-versions-to-keep: 0
-          delete-only-untagged-versions: 'true'
-      - uses: actions/delete-package-versions@v5
-        if: ${{ needs.metadata.outputs.version-id != '' }}
-        with:
-          package-name: ${{ inputs.package-name }}
-          package-type: 'container'
-          package-version-ids: '${{ needs.metadata.outputs.version-id }}'
+  # # this job will only run if the PR has been closed without being merged
+  # close_job:
+  #   name: "PR was closed but not merged"
+  #   if: ${{ inputs.pull-request-merged == false }}
+  #   runs-on: ubuntu-latest
+  #   needs:
+  #     metadata
+  #   steps:
+  #     - uses: actions/delete-package-versions@v5
+  #       with:
+  #         package-name: ${{ inputs.package-name }}
+  #         package-type: 'container'
+  #         min-versions-to-keep: 0
+  #         delete-only-untagged-versions: 'true'
+  #     - uses: actions/delete-package-versions@v5
+  #       if: ${{ needs.metadata.outputs.version-id != '' }}
+  #       with:
+  #         package-name: ${{ inputs.package-name }}
+  #         package-type: 'container'
+  #         package-version-ids: '${{ needs.metadata.outputs.version-id }}'
