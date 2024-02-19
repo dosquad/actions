@@ -12,6 +12,11 @@ on:
         default: ''
         description: "Custom Makefile target to run"
         type: string
+      codecov-flags:
+        required: false
+        default: 'unittests'
+        description: "Codecov Action Flags"
+        type: string
       docker-push-tag:
         required: false
         default: ''
@@ -22,6 +27,11 @@ on:
         default: "ubuntu-latest"
         description: "Runner label for jobs"
         type: string
+      static-test:
+        required: false
+        default: true
+        description: "Check that no new files have been created or local files modified"
+        type: boolean
       upload-artifacts:
         required: false
         default: ""
@@ -51,7 +61,7 @@ jobs:
       uses: actions/checkout@v4
 
     - name: Docker Login (Docker Hub)
-      uses: docker/login-action@v2
+      uses: docker/login-action@v3
       env:
         DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
         DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
@@ -61,7 +71,7 @@ jobs:
         password: ${{ secrets.DOCKER_PASSWORD }}
 
     - name: Docker Login (GitHub Container Registry)
-      uses: docker/login-action@v2
+      uses: docker/login-action@v3
       env:
         DOCKER_GITHUB_TOKEN: ${{ secrets.DOCKER_GITHUB_TOKEN }}
       if: ${{ env.DOCKER_GITHUB_TOKEN != '' }}
@@ -72,14 +82,14 @@ jobs:
 
     - name: Set up Node
       if: ${{ hashFiles('package.json') != '' }}
-      uses: actions/setup-node@v3
+      uses: actions/setup-node@v4
       with:
         node-version: 16
       id: node
 
     - name: Set up Go
       if: ${{ hashFiles('go.mod') != '' }}
-      uses: actions/setup-go@v4
+      uses: actions/setup-go@v5
       with:
         go-version: ^1
         cache: false
@@ -91,7 +101,7 @@ jobs:
 
     - name: Run golangci/golangci-lint
       if: ${{ hashFiles('.golangci.yml') != '' }}
-      uses: golangci/golangci-lint-action@v3
+      uses: golangci/golangci-lint-action@v4
       with:
         skip-cache: true
 
@@ -125,6 +135,7 @@ jobs:
       if: ${{ env.CODECOV_TOKEN != '' }}
       uses: codecov/codecov-action@v3
       with:
+        flags: ${{ inputs.codecov-flags }}
         token: ${{ secrets.CODECOV_TOKEN }}
         fail_ci_if_error: false
         verbose: true
@@ -142,3 +153,7 @@ jobs:
       with:
         name: ${{ inputs.upload-artifacts-name }}
         path: ${{ inputs.upload-artifacts }}
+
+    - name: Check diff
+      if: ${{ inputs.static-test }}
+      run: '[[ -z $(git status -s) ]] || (printf "Existing modified/untracked files."; exit 1)'
