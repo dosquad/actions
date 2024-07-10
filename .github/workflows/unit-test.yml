@@ -7,31 +7,26 @@ on:
         required: false
         description: "Binary name"
         type: string
-      make-custom-target:
+      stack-test:
         required: false
-        default: ''
-        description: "Custom Makefile target to run"
-        type: string
+        default: false
+        description: "Run CI Stack Test"
+        type: boolean
+      docker-push:
+        required: false
+        default: false
+        description: "Enable docker push"
+        type: boolean
       codecov-flags:
         required: false
         default: 'unittests'
         description: "Codecov Action Flags"
-        type: string
-      docker-push-tag:
-        required: false
-        default: ''
-        description: "Docker push tag"
         type: string
       runs-on:
         required: false
         default: "ubuntu-latest"
         description: "Runner label for jobs"
         type: string
-      static-test:
-        required: false
-        default: true
-        description: "Check that no new files have been created or local files modified"
-        type: boolean
       upload-artifacts:
         required: false
         default: ""
@@ -42,14 +37,33 @@ on:
         default: "artifacts-${{ github.sha }}"
         description: "Artifacts name"
         type: string
+      vulncheck:
+        required: false
+        default: true
+        description: "Enable golang vulnerability check"
+        type: boolean
+      golangci-args:
+        required: false
+        default: --timeout=10m
+        description: "golangci-lint arguments"
+        type: string
+      platforms:
+        required: false
+        default: "linux/amd64"
+        description: "Comma separated list of platforms for docker buildx (eg. linux/amd64,linux/arm64)"
+        type: string
     secrets:
+      CODECOV_TOKEN:
+        required: false
       DOCKER_USERNAME:
         required: false
       DOCKER_PASSWORD:
         required: false
       DOCKER_GITHUB_TOKEN:
         required: false
-      CODECOV_TOKEN:
+      CWX_GH_TOKEN:
+        required: false
+      CWX_GHE_TOKEN:
         required: false
 
 jobs:
@@ -59,6 +73,29 @@ jobs:
     steps:
     - name: Checkout
       uses: actions/checkout@v4
+
+    - name: Platforms comma to spaces
+      id: platforms
+      uses: actions/github-script@v7
+      env:
+        INPUT_PLATFORMS: "${{ inputs.platforms }}"
+      with:
+        script: |
+          const { INPUT_PLATFORMS } = process.env
+          core.setOutput('spaces', INPUT_PLATFORMS.replace(',', ' '))
+          core.setOutput('commas', INPUT_PLATFORMS.replace(' ', ','))
+
+    - name: Set up QEMU
+      if: ${{ inputs.platforms != 'linux/amd64' }}
+      uses: docker/setup-qemu-action@v3
+      with:
+        platforms: ${{ inputs.platforms }}
+
+    - name: Set up Docker Buildx
+      if: ${{ inputs.platforms != 'linux/amd64' }}
+      uses: docker/setup-buildx-action@v3
+      with:
+        platforms: ${{ inputs.platforms }}
 
     - name: Docker Login (Docker Hub)
       uses: docker/login-action@v3
@@ -89,7 +126,7 @@ jobs:
 
     - name: Set up Go
       if: ${{ hashFiles('go.mod') != '' }}
-      uses: actions/setup-go@v5
+      uses: actions/setup-go@v4
       with:
         go-version: ^1
         cache: true
@@ -100,33 +137,62 @@ jobs:
       run: |
         echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
 
-    - name: Download module dependencies
-      if: ${{ hashFiles('go.mod') != '' }}
-      run: go mod download
-
     - name: Run golangci/golangci-lint
       if: ${{ hashFiles('.golangci.yml') != '' }}
       uses: golangci/golangci-lint-action@v6
       with:
         skip-cache: true
+        args: ${{ inputs.golangci-args }}
+
+    - name: Run govulncheck
+      if: ${{ (hashFiles('go.mod') != '') && inputs.vulncheck }}
+      continue-on-error: true
+      run: |
+        go install golang.org/x/vuln/cmd/govulncheck@latest
+        mkdir -p "artifacts"
+        govulncheck ./...
+      shell: bash
 
     - name: Node Package Manager CI
       if: ${{ hashFiles('package.json') != '' }}
       run: npm ci
 
+    - name: Make Docker
+      if: ${{ hashFiles('Dockerfile') != '' && hashFiles('Makefile') != '' }}
+      run: make docker
+
     - name: Run Unit Tests Target
+      if: ${{ hashFiles('Makefile') != '' }}
       run: make test
 
     - name: Run CI Target
+      if: ${{ hashFiles('Makefile') != '' }}
       run: make ci
+      env:
+        DISABLE_FOSSA: true
+
+    - name: Run Mage
+      if: ${{ hashFiles('magefiles/*') != '' }}
+      uses: magefile/mage-action@v3
+      with:
+        version: latest
 
     - name: Make Binary Target
-      if: ${{ inputs.binary-name }}
+      if: ${{ hashFiles('Makefile') != '' && inputs.binary-name }}
       run: make artifacts/build/release/linux/amd64/${{ inputs.binary-name }}
 
-    - name: Run Custom Make Target
-      if: ${{ inputs.make-custom-target != '' }}
-      run: make ${{ inputs.make-custom-target }}
+    - name: Mage Binary Target
+      if: ${{ hashFiles('magefiles/*') != '' && inputs.binary-name }}
+      uses: magefile/mage-action@v3
+      with:
+        version: latest
+        args: build:releaseCommand ${{ inputs.binary-name }}
+
+    - name: Run CI Stack Test
+      if: ${{ hashFiles('Makefile') != '' && inputs.stack-test }}
+      run: make ci-stack-test
+      env:
+        DISABLE_FOSSA: true
 
     - name: Upload coverage to Codecov
       env:
@@ -140,10 +206,8 @@ jobs:
         verbose: true
 
     - name: Make Docker Push
-      if: ${{ inputs.docker-push-tag != '' }}
+      if: ${{ hashFiles('Makefile') != '' && ( ( github.event_name == 'pull_request' && inputs.docker-push ) || ( startsWith(github.ref, 'refs/tags/') && inputs.docker-push ) ) }}
       run: make docker-push
-      env:
-        DOCKER_TAGS: ${{ inputs.docker-push-tag }}
 
     - name: Store Artifacts
       if: '!cancelled()'
@@ -152,7 +216,3 @@ jobs:
       with:
         name: ${{ inputs.upload-artifacts-name }}
         path: ${{ inputs.upload-artifacts }}
-
-    - name: Check diff
-      if: ${{ inputs.static-test }}
-      run: '[[ -z $(git status -s) ]] || (printf "Existing modified/untracked files."; exit 1)'
