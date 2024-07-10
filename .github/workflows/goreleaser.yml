@@ -75,7 +75,7 @@ jobs:
       run: make ci
 
     - name: Run GoReleaser
-      uses: goreleaser/goreleaser-action@v5
+      uses: goreleaser/goreleaser-action@v6
       with:
         version: latest
         args: release --clean
