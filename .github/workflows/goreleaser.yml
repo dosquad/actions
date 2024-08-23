@@ -80,6 +80,7 @@ jobs:
         version: latest
         args: release --clean
       env:
+        GOVERSION_NR: ${{ steps.go.outputs.go-version }}
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_GITHUB_TOKEN }}
 
