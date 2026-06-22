@@ -71,6 +71,12 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.DOCKER_GITHUB_TOKEN }}
 
+    - name: Run Mage Default Target
+      if: ${{ hashFiles('magefiles/*') != '' || hashFiles('magefiles.go') != '' }}
+      uses: magefile/mage-action@v3
+      with:
+        version: latest
+
     - name: Run CI Target
       if: ${{ hashFiles('Makefile') != '' }}
       run: make ci
