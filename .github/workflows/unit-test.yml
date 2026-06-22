@@ -173,7 +173,7 @@ jobs:
         DISABLE_FOSSA: true
 
     - name: Run Mage
-      if: ${{ hashFiles('magefiles/*') != '' || hashFiles('magefiles.go') != '' }}
+      if: ${{ hashFiles('magefiles/*') != '' || hashFiles('magefile*.go') != '' }}
       uses: magefile/mage-action@v3
       with:
         version: latest
@@ -183,7 +183,7 @@ jobs:
       run: make artifacts/build/release/linux/amd64/${{ inputs.binary-name }}
 
     - name: Mage Binary Target
-      if: ${{ (hashFiles('magefiles/*') != '' || hashFiles('magefiles.go') != '') && inputs.binary-name }}
+      if: ${{ (hashFiles('magefiles/*') != '' || hashFiles('magefile*.go') != '') && inputs.binary-name }}
       uses: magefile/mage-action@v3
       with:
         version: latest

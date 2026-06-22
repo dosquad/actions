@@ -72,7 +72,7 @@ jobs:
         password: ${{ secrets.DOCKER_GITHUB_TOKEN }}
 
     - name: Run Mage Default Target
-      if: ${{ hashFiles('magefiles/*') != '' || hashFiles('magefiles.go') != '' }}
+      if: ${{ hashFiles('magefiles/*') != '' || hashFiles('magefile*.go') != '' }}
       uses: magefile/mage-action@v3
       with:
         version: latest
